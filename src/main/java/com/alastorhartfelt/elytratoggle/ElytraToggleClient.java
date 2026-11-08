@@ -112,10 +112,7 @@ public final class ElytraToggleClient implements ClientModInitializer {
                 && chestStack.is(Items.ELYTRA)) {
             ItemStack originalSlotStack = inventory.getItem(state.originalElytraSlot);
             if (!canRestoreSimpleSwap(originalSlotStack, state)) {
-                player.displayClientMessage(
-                        Component.literal("ElytraToggle: Your original inventory slot has changed."),
-                        true
-                );
+                showStatus(player, "ElytraToggle: Your original inventory slot has changed.");
                 return;
             }
 
@@ -155,10 +152,7 @@ public final class ElytraToggleClient implements ClientModInitializer {
                     : !elytraSlot.isEmpty() && elytraSlot.getItem() == state.displacedChestItem;
 
             if (!chestStillMatches || !selectedSlotHasElytra || !elytraSlotMatches) {
-                player.displayClientMessage(
-                        Component.literal("ElytraToggle: Inventory changed; cannot safely reverse the swap."),
-                        true
-                );
+                showStatus(player, "ElytraToggle: Inventory changed; cannot safely reverse the swap.");
                 return;
             }
 
@@ -228,10 +222,7 @@ public final class ElytraToggleClient implements ClientModInitializer {
             if (!displaced.isEmpty()) {
                 clickSlot(client, player, elytraMenuSlot);
             }
-            player.displayClientMessage(
-                    Component.literal("Elytra equipped. No chestplate found; G will not toggle it off."),
-                    true
-            );
+            showStatus(player, "Elytra equipped. No chestplate found; G will not toggle it off.");
             return;
         }
 
@@ -250,10 +241,7 @@ public final class ElytraToggleClient implements ClientModInitializer {
         clickSlot(client, player, elytraMenuSlot);
         clickSlot(client, player, chestplateMenuSlot);
 
-        player.displayClientMessage(
-                Component.literal("Best-durability chestplate equipped; Elytra moved to its old slot."),
-                true
-        );
+        showStatus(player, "Best-durability chestplate equipped; Elytra moved to its old slot.");
     }
 
     private static void performSimpleSwap(

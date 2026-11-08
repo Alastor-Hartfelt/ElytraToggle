@@ -1,5 +1,7 @@
 {
   "key.category.elytratoggle.main": "ElytraToggle",
   "key.elytratoggle.toggle": "Toggle Elytra",
-  "key.elytratoggle.swap": "Swap Elytra/Chestplate"
+  "key.elytratoggle.swap": "Swap Elytra/Chestplate",
+  "key.elytratoggle.toggle_mouse": "Toggle Elytra (Mouse 4)",
+  "key.elytratoggle.swap_mouse": "Swap Elytra/Chestplate (Mouse 5)"
 }

@@ -135,19 +135,20 @@ public final class ElytraToggleClient implements ClientModInitializer {
         var inventory = player.getInventory();
         ItemStack chestStack = player.getItemBySlot(EquipmentSlot.CHEST);
 
-        // Reverse the simple case where the best chestplate was already equipped.
+        // Reverse the simple swap by locating the displaced chestplate again.
+        // Its slot may have changed since the original swap.
         if (state.originalElytraSlot >= 0 && state.inventoryChestplateSlot < 0
                 && chestStack.is(Items.ELYTRA)) {
-            ItemStack originalSlotStack = inventory.getItem(state.originalElytraSlot);
-            if (!canRestoreSimpleSwap(originalSlotStack, state)) {
-                showStatus(player, "ElytraToggle: Your original inventory slot has changed.");
+            int chestplateSlot = findItemSlot(inventory, state.displacedChestItem, state.originalElytraSlot);
+            if (chestplateSlot < 0) {
+                showStatus(player, "ElytraToggle: Could not find the displaced chestplate to reverse the swap.");
                 return;
             }
 
-            int originalMenuSlot = inventorySlotToMenuSlot(state.originalElytraSlot);
-            clickSlot(client, player, originalMenuSlot);
+            int chestplateMenuSlot = inventorySlotToMenuSlot(chestplateSlot);
+            clickSlot(client, player, chestplateMenuSlot);
             clickSlot(client, player, CHEST_MENU_SLOT);
-            clickSlot(client, player, originalMenuSlot);
+            clickSlot(client, player, chestplateMenuSlot);
             state.clear();
             showStatus(player, "Elytra/chestplate swap reverted.");
             return;
@@ -157,39 +158,64 @@ public final class ElytraToggleClient implements ClientModInitializer {
         // the selected chestplate's old slot; the old chest item went to the
         // Elytra's original slot.
         if (state.inventoryChestplateSlot >= 0) {
-            ItemStack selectedSlot = inventory.getItem(state.inventoryChestplateSlot);
             if (state.elytraWasEquipped) {
-                if (!chestStack.is(state.selectedChestplateItem) || !selectedSlot.is(Items.ELYTRA)) {
-                    showStatus(player, "ElytraToggle: Inventory changed; cannot safely reverse the swap.");
+                if (!chestStack.is(state.selectedChestplateItem)) {
+                    showStatus(player, "ElytraToggle: The equipped chestplate changed; cannot safely reverse the swap.");
                     return;
                 }
-                int selectedMenuSlot = inventorySlotToMenuSlot(state.inventoryChestplateSlot);
-                clickSlot(client, player, selectedMenuSlot);
+                int elytraSlot = findElytraSlot(inventory);
+                if (elytraSlot < 0) {
+                    showStatus(player, "ElytraToggle: Could not find your Elytra to reverse the swap.");
+                    return;
+                }
+                int elytraMenuSlot = inventorySlotToMenuSlot(elytraSlot);
+                clickSlot(client, player, elytraMenuSlot);
                 clickSlot(client, player, CHEST_MENU_SLOT);
-                clickSlot(client, player, selectedMenuSlot);
+                clickSlot(client, player, elytraMenuSlot);
                 state.clear();
                 showStatus(player, "Elytra/chestplate swap reverted.");
                 return;
             }
-            ItemStack elytraSlot = inventory.getItem(state.originalElytraSlot);
-            boolean chestStillMatches = !chestStack.isEmpty()
-                    && chestStack.getItem() == state.selectedChestplateItem;
-            boolean selectedSlotHasElytra = selectedSlot.is(Items.ELYTRA);
-            boolean elytraSlotMatches = state.displacedChestItem == Items.AIR
-                    ? elytraSlot.isEmpty()
-                    : !elytraSlot.isEmpty() && elytraSlot.getItem() == state.displacedChestItem;
 
-            if (!chestStillMatches || !selectedSlotHasElytra || !elytraSlotMatches) {
-                showStatus(player, "ElytraToggle: Inventory changed; cannot safely reverse the swap.");
+            if (chestStack.isEmpty() || chestStack.getItem() != state.selectedChestplateItem) {
+                showStatus(player, "ElytraToggle: The equipped chestplate changed; cannot safely reverse the swap.");
                 return;
             }
 
-            int selectedMenuSlot = inventorySlotToMenuSlot(state.inventoryChestplateSlot);
-            int elytraMenuSlot = inventorySlotToMenuSlot(state.originalElytraSlot);
-            clickSlot(client, player, selectedMenuSlot);
+            int elytraSlot = findElytraSlot(inventory);
+            if (elytraSlot < 0) {
+                showStatus(player, "ElytraToggle: Could not find your Elytra to reverse the swap.");
+                return;
+            }
+
+            int displacedSlot = state.displacedChestItem == Items.AIR
+                    ? -1 : findItemSlot(inventory, state.displacedChestItem, state.originalElytraSlot);
+            if (state.displacedChestItem != Items.AIR && displacedSlot < 0) {
+                showStatus(player, "ElytraToggle: Could not find the displaced chest item to reverse the swap.");
+                return;
+            }
+
+            int elytraDestination = displacedSlot >= 0
+                    ? displacedSlot
+                    : (isInventorySlotEmpty(inventory, state.originalElytraSlot)
+                        ? state.originalElytraSlot : findEmptyInventoryFirst(inventory));
+            if (elytraDestination < 0 || elytraDestination == elytraSlot) {
+                showStatus(player, "ElytraToggle: No safe inventory slot to restore the Elytra.");
+                return;
+            }
+
+            int chestplateDestination = isInventorySlotEmpty(inventory, state.inventoryChestplateSlot)
+                    ? state.inventoryChestplateSlot : findEmptyInventoryFirstExcluding(inventory, elytraDestination);
+            if (chestplateDestination < 0 || chestplateDestination == elytraDestination) {
+                showStatus(player, "ElytraToggle: No safe inventory slot to restore the chestplate.");
+                return;
+            }
+
+            int elytraMenuSlot = inventorySlotToMenuSlot(elytraSlot);
             clickSlot(client, player, elytraMenuSlot);
+            clickSlot(client, player, inventorySlotToMenuSlot(elytraDestination));
             clickSlot(client, player, CHEST_MENU_SLOT);
-            clickSlot(client, player, selectedMenuSlot);
+            clickSlot(client, player, inventorySlotToMenuSlot(chestplateDestination));
 
             state.clear();
             showStatus(player, "Elytra/chestplate swap reverted.");
@@ -296,10 +322,30 @@ public final class ElytraToggleClient implements ClientModInitializer {
         return client.player != null && client.gameMode != null && client.screen == null;
     }
 
-    private static boolean canRestoreSimpleSwap(ItemStack originalSlotStack, SwapState state) {
-        return originalSlotStack.isEmpty()
-                || (state.displacedChestItem != Items.AIR
-                && originalSlotStack.getItem() == state.displacedChestItem);
+    private static int findItemSlot(
+            net.minecraft.world.entity.player.Inventory inventory, Item item, int preferredSlot
+    ) {
+        if (item == Items.AIR) return -1;
+        if (preferredSlot >= 0 && preferredSlot < 36
+                && inventory.getItem(preferredSlot).getItem() == item) {
+            return preferredSlot;
+        }
+        for (int i = 0; i < 36; i++) {
+            if (i != preferredSlot && inventory.getItem(i).getItem() == item) return i;
+        }
+        return -1;
+    }
+
+    private static int findEmptyInventoryFirstExcluding(
+            net.minecraft.world.entity.player.Inventory inventory, int excludedSlot
+    ) {
+        for (int i = 9; i < 36; i++) {
+            if (i != excludedSlot && inventory.getItem(i).isEmpty()) return i;
+        }
+        for (int i = 0; i < 9; i++) {
+            if (i != excludedSlot && inventory.getItem(i).isEmpty()) return i;
+        }
+        return -1;
     }
 
     private static int findEmptyInventoryFirst(net.minecraft.world.entity.player.Inventory inventory) {

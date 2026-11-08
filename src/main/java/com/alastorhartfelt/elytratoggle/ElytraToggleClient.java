@@ -78,12 +78,10 @@ public final class ElytraToggleClient implements ClientModInitializer {
         var inventory = player.getInventory();
         ItemStack chestStack = player.getItemBySlot(EquipmentSlot.CHEST);
 
-        if (state.toggleActive) {
-            if (!chestStack.is(Items.ELYTRA)) {
-                showStatus(player, "ElytraToggle: R's Elytra is not equipped.");
-                return;
-            }
-            int destination = isInventorySlotEmpty(inventory, state.originalElytraSlot)
+        // R is an unconditional Elytra toggle: if an Elytra is equipped for
+        // any reason (including a previous G swap), R removes it.
+        if (chestStack.is(Items.ELYTRA)) {
+            int destination = state.toggleActive && isInventorySlotEmpty(inventory, state.originalElytraSlot)
                     ? state.originalElytraSlot : findEmptyInventoryFirst(inventory);
             if (destination < 0) {
                 showStatus(player, "ElytraToggle: No empty inventory slot for the Elytra.");
@@ -96,10 +94,6 @@ public final class ElytraToggleClient implements ClientModInitializer {
             return;
         }
 
-        if (chestStack.is(Items.ELYTRA)) {
-            showStatus(player, "ElytraToggle: An Elytra is already equipped.");
-            return;
-        }
         int elytraSlot = findElytraSlot(inventory);
         if (elytraSlot < 0) {
             showStatus(player, "No Elytra found in your inventory.");

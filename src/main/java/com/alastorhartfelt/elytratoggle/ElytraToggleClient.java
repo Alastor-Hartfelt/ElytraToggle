@@ -56,7 +56,14 @@ public final class ElytraToggleClient implements ClientModInitializer {
         var inventory = player.getInventory();
         ItemStack chestStack = player.getItemBySlot(EquipmentSlot.CHEST);
 
-        if (state.originalElytraSlot >= 0 && chestStack.is(Items.ELYTRA)) {
+        if (state.originalElytraSlot >= 0) {
+            if (!chestStack.is(Items.ELYTRA)) {
+                player.displayClientMessage(
+                        Component.literal("ElytraToggle: R's Elytra is no longer in the chest slot; move it back before toggling off."),
+                        true
+                );
+                return;
+            }
             if (!canRestoreSimpleSwap(inventory.getItem(state.originalElytraSlot), state)) {
                 player.displayClientMessage(
                         Component.literal("ElytraToggle: Your original inventory slot has changed."),
@@ -66,14 +73,8 @@ public final class ElytraToggleClient implements ClientModInitializer {
             }
 
             int originalMenuSlot = inventorySlotToMenuSlot(state.originalElytraSlot);
-            if (state.displacedChestItem != Items.AIR) {
-                clickSlot(client, player, originalMenuSlot);
-                clickSlot(client, player, CHEST_MENU_SLOT);
-                clickSlot(client, player, originalMenuSlot);
-            } else {
-                clickSlot(client, player, CHEST_MENU_SLOT);
-                clickSlot(client, player, originalMenuSlot);
-            }
+            clickSlot(client, player, CHEST_MENU_SLOT);
+            clickSlot(client, player, originalMenuSlot);
 
             state.clear();
             player.displayClientMessage(Component.literal("Elytra toggle reverted."), true);
@@ -207,8 +208,17 @@ public final class ElytraToggleClient implements ClientModInitializer {
         }
 
         if (bestChestplateSlot < 0) {
+            // No chestplate exists anywhere: G still equips the Elytra, but this
+            // is intentionally one-way. Pressing G again will not remove it.
+            ItemStack displaced = chestStack;
+            int elytraMenuSlot = inventorySlotToMenuSlot(elytraSlot);
+            clickSlot(client, player, elytraMenuSlot);
+            clickSlot(client, player, CHEST_MENU_SLOT);
+            if (!displaced.isEmpty()) {
+                clickSlot(client, player, elytraMenuSlot);
+            }
             player.displayClientMessage(
-                    Component.literal("ElytraToggle: No chestplate found to swap with your Elytra."),
+                    Component.literal("Elytra equipped. No chestplate found; G will not toggle it off."),
                     true
             );
             return;

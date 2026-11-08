@@ -50,15 +50,11 @@ public final class ElytraToggleClient implements ClientModInitializer {
                 return;
             }
 
-            // Minecraft permits two actions to be assigned to the same key.
-            // Avoid firing both inventory transactions on one physical press.
-            if (togglePressed && swapPressed) {
-                showStatus(client.player, "ElytraToggle: Assign different keys to R and G actions.");
-                return;
-            }
-
+            // R always has priority. If both actions are triggered in the
+            // same tick, perform only R so G cannot interfere with its swap.
             if (togglePressed) {
                 toggleElytra(client, TOGGLE_STATE);
+                return;
             }
             if (swapPressed) {
                 swapBestChestplate(client);

@@ -32,7 +32,6 @@ public final class ElytraToggleClient implements ClientModInitializer {
 
     // Each hotkey owns its own transaction so pressing one cannot undo the other.
     private static final SwapState TOGGLE_STATE = new SwapState();
-    private static final SwapState SWAP_STATE = new SwapState();
 
     @Override
     public void onInitializeClient() {
@@ -62,7 +61,7 @@ public final class ElytraToggleClient implements ClientModInitializer {
                 toggleElytra(client, TOGGLE_STATE);
             }
             if (swapPressed) {
-                swapBestChestplate(client, SWAP_STATE);
+                swapBestChestplate(client);
             }
         });
     }
@@ -124,192 +123,66 @@ public final class ElytraToggleClient implements ClientModInitializer {
         showStatus(player, "Elytra equipped.");
     }
 
-    // G: prefer the highest-maximum-durability chestplate in inventory. If the
-    // equipped chestplate is already the best one, swap with that instead.
-    private static void swapBestChestplate(Minecraft client, SwapState state) {
-        if (!canUseInventory(client)) {
-            return;
-        }
+    // G: decide what to do from the items equipped RIGHT NOW.
+    // No remembered slot/state is used, so moving items around between presses
+    // cannot make the swap logic stale.
+    private static void swapBestChestplate(Minecraft client) {
+        if (!canUseInventory(client)) return;
 
         LocalPlayer player = client.player;
         var inventory = player.getInventory();
-        ItemStack chestStack = player.getItemBySlot(EquipmentSlot.CHEST);
+        ItemStack equipped = player.getItemBySlot(EquipmentSlot.CHEST);
+        int elytraSlot = findElytraSlot(inventory);
+        int bestChestplateSlot = findBestChestplateSlot(inventory);
 
-        // Reverse the simple swap by locating the displaced chestplate again.
-        // Its slot may have changed since the original swap.
-        if (state.originalElytraSlot >= 0 && state.inventoryChestplateSlot < 0
-                && chestStack.is(Items.ELYTRA)) {
-            int chestplateSlot = findItemSlot(inventory, state.displacedChestItem, state.originalElytraSlot);
-            if (chestplateSlot < 0) {
-                showStatus(player, "ElytraToggle: Could not find the displaced chestplate to reverse the swap.");
-                return;
-            }
-
-            int chestplateMenuSlot = inventorySlotToMenuSlot(chestplateSlot);
-            clickSlot(client, player, chestplateMenuSlot);
-            clickSlot(client, player, CHEST_MENU_SLOT);
-            clickSlot(client, player, chestplateMenuSlot);
-            state.clear();
-            showStatus(player, "Elytra/chestplate swap reverted.");
-            return;
-        }
-
-        // Reverse an inventory-chestplate transaction. The Elytra was placed in
-        // the selected chestplate's old slot; the old chest item went to the
-        // Elytra's original slot.
-        if (state.inventoryChestplateSlot >= 0) {
-            if (state.elytraWasEquipped) {
-                if (!chestStack.is(state.selectedChestplateItem)) {
-                    showStatus(player, "ElytraToggle: The equipped chestplate changed; cannot safely reverse the swap.");
-                    return;
-                }
-                int elytraSlot = findElytraSlot(inventory);
-                if (elytraSlot < 0) {
-                    showStatus(player, "ElytraToggle: Could not find your Elytra to reverse the swap.");
-                    return;
-                }
-                int elytraMenuSlot = inventorySlotToMenuSlot(elytraSlot);
-                clickSlot(client, player, elytraMenuSlot);
-                clickSlot(client, player, CHEST_MENU_SLOT);
-                clickSlot(client, player, elytraMenuSlot);
-                state.clear();
-                showStatus(player, "Elytra/chestplate swap reverted.");
-                return;
-            }
-
-            if (chestStack.isEmpty() || chestStack.getItem() != state.selectedChestplateItem) {
-                showStatus(player, "ElytraToggle: The equipped chestplate changed; cannot safely reverse the swap.");
-                return;
-            }
-
-            int elytraSlot = findElytraSlot(inventory);
-            if (elytraSlot < 0) {
-                showStatus(player, "ElytraToggle: Could not find your Elytra to reverse the swap.");
-                return;
-            }
-
-            int displacedSlot = state.displacedChestItem == Items.AIR
-                    ? -1 : findItemSlot(inventory, state.displacedChestItem, state.originalElytraSlot);
-            if (state.displacedChestItem != Items.AIR && displacedSlot < 0) {
-                showStatus(player, "ElytraToggle: Could not find the displaced chest item to reverse the swap.");
-                return;
-            }
-
-            int elytraDestination = displacedSlot >= 0
-                    ? displacedSlot
-                    : (isInventorySlotEmpty(inventory, state.originalElytraSlot)
-                        ? state.originalElytraSlot : findEmptyInventoryFirst(inventory));
-            if (elytraDestination < 0 || elytraDestination == elytraSlot) {
-                showStatus(player, "ElytraToggle: No safe inventory slot to restore the Elytra.");
-                return;
-            }
-
-            int chestplateDestination = isInventorySlotEmpty(inventory, state.inventoryChestplateSlot)
-                    ? state.inventoryChestplateSlot : findEmptyInventoryFirstExcluding(inventory, elytraDestination);
-            if (chestplateDestination < 0 || chestplateDestination == elytraDestination) {
-                showStatus(player, "ElytraToggle: No safe inventory slot to restore the chestplate.");
-                return;
-            }
-
-            int elytraMenuSlot = inventorySlotToMenuSlot(elytraSlot);
-            clickSlot(client, player, elytraMenuSlot);
-            clickSlot(client, player, inventorySlotToMenuSlot(elytraDestination));
-            clickSlot(client, player, CHEST_MENU_SLOT);
-            clickSlot(client, player, inventorySlotToMenuSlot(chestplateDestination));
-
-            state.clear();
-            showStatus(player, "Elytra/chestplate swap reverted.");
-            return;
-        }
-
-        if (chestStack.is(Items.ELYTRA)) {
-            int bestSlot = findBestChestplateSlot(inventory);
-            if (bestSlot < 0) {
+        // Elytra currently equipped: find a chestplate and put it on.
+        if (equipped.is(Items.ELYTRA)) {
+            if (bestChestplateSlot < 0) {
                 showStatus(player, "No chestplate found in your inventory.");
                 return;
             }
-            state.inventoryChestplateSlot = bestSlot;
-            state.selectedChestplateItem = inventory.getItem(bestSlot).getItem();
-            state.elytraWasEquipped = true;
-            int menuSlot = inventorySlotToMenuSlot(bestSlot);
-            clickSlot(client, player, menuSlot);
+
+            int chestplateMenuSlot = inventorySlotToMenuSlot(bestChestplateSlot);
+            clickSlot(client, player, chestplateMenuSlot);
             clickSlot(client, player, CHEST_MENU_SLOT);
-            clickSlot(client, player, menuSlot);
+            clickSlot(client, player, chestplateMenuSlot);
             showStatus(player, "Elytra swapped with your best chestplate.");
             return;
         }
 
-        int elytraSlot = findElytraSlot(inventory);
+        // Elytra not equipped: find it before attempting any swap.
         if (elytraSlot < 0) {
             showStatus(player, "No Elytra found in your inventory.");
             return;
         }
 
-        int bestChestplateSlot = -1;
-        int bestDurability = -1;
-        for (int i = 0; i < 36; i++) {
-            ItemStack candidate = inventory.getItem(i);
-            if (isChestplate(candidate)) {
-                int durability = candidate.getMaxDamage();
-                if (durability > bestDurability) {
-                    bestDurability = durability;
-                    bestChestplateSlot = i;
-                }
-            }
-        }
-
-        // If the equipped chestplate is at least as durable as the best one in
-        // inventory, retain the simple chest-slot swap behavior.
-        if (isChestplate(chestStack)
-                && chestStack.getMaxDamage() >= bestDurability) {
-            performSimpleSwap(client, player, chestStack, elytraSlot, state);
-            return;
-        }
-
-        if (bestChestplateSlot < 0) {
-            // No chestplate exists anywhere: G still equips the Elytra, but this
-            // is intentionally one-way. Pressing G again will not remove it.
-            ItemStack displaced = chestStack;
+        // If a better chestplate is in the inventory, equip it and rotate the
+        // old chest item and Elytra into the two vacated inventory slots.
+        if (bestChestplateSlot >= 0
+                && (!isChestplate(equipped)
+                    || inventory.getItem(bestChestplateSlot).getMaxDamage() > equipped.getMaxDamage())) {
+            int chestplateMenuSlot = inventorySlotToMenuSlot(bestChestplateSlot);
             int elytraMenuSlot = inventorySlotToMenuSlot(elytraSlot);
-            clickSlot(client, player, elytraMenuSlot);
+
+            clickSlot(client, player, chestplateMenuSlot);
             clickSlot(client, player, CHEST_MENU_SLOT);
-            if (!displaced.isEmpty()) {
-                clickSlot(client, player, elytraMenuSlot);
-            }
-            showStatus(player, "Elytra equipped. No chestplate found; G will not toggle it off.");
+            clickSlot(client, player, elytraMenuSlot);
+            clickSlot(client, player, chestplateMenuSlot);
+            showStatus(player, "Best-durability chestplate equipped; Elytra moved to its old slot.");
             return;
         }
 
-        // Four clicks perform a safe three-item rotation:
-        // selected chestplate -> chest slot, old chest item -> Elytra slot,
-        // Elytra -> selected chestplate's former inventory slot.
-        state.originalElytraSlot = elytraSlot;
-        state.inventoryChestplateSlot = bestChestplateSlot;
-        state.selectedChestplateItem = inventory.getItem(bestChestplateSlot).getItem();
-        state.displacedChestItem = chestStack.isEmpty() ? Items.AIR : chestStack.getItem();
-
-        int chestplateMenuSlot = inventorySlotToMenuSlot(bestChestplateSlot);
-        int elytraMenuSlot = inventorySlotToMenuSlot(elytraSlot);
-        clickSlot(client, player, chestplateMenuSlot);
-        clickSlot(client, player, CHEST_MENU_SLOT);
-        clickSlot(client, player, elytraMenuSlot);
-        clickSlot(client, player, chestplateMenuSlot);
-
-        showStatus(player, "Best-durability chestplate equipped; Elytra moved to its old slot.");
-    }
-
-    private static void performSimpleSwap(
-            Minecraft client, LocalPlayer player, ItemStack chestStack, int elytraSlot, SwapState state
-    ) {
-        state.originalElytraSlot = elytraSlot;
-        state.displacedChestItem = chestStack.getItem();
-
+        // Otherwise just exchange the equipped chest item and the Elytra.
         int elytraMenuSlot = inventorySlotToMenuSlot(elytraSlot);
         clickSlot(client, player, elytraMenuSlot);
         clickSlot(client, player, CHEST_MENU_SLOT);
         clickSlot(client, player, elytraMenuSlot);
 
-        showStatus(player, "Elytra and equipped chestplate swapped.");
+        if (isChestplate(equipped)) {
+            showStatus(player, "Elytra and equipped chestplate swapped.");
+        } else {
+            showStatus(player, "Elytra equipped.");
+        }
     }
 
     private static void showStatus(LocalPlayer player, String message) {

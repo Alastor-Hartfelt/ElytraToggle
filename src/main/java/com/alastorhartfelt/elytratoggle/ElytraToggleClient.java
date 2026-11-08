@@ -30,30 +30,19 @@ public final class ElytraToggleClient implements ClientModInitializer {
             new KeyMapping("key.elytratoggle.swap", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_G, CATEGORY)
     );
 
-    // Dedicated mouse side-button aliases; keyboard bindings remain available.
-    private static final KeyMapping TOGGLE_MOUSE_KEY = KeyBindingHelper.registerKeyBinding(
-            new KeyMapping("key.elytratoggle.toggle_mouse", InputConstants.Type.MOUSE, GLFW.GLFW_MOUSE_BUTTON_4, CATEGORY)
-    );
-
-    private static final KeyMapping SWAP_MOUSE_KEY = KeyBindingHelper.registerKeyBinding(
-            new KeyMapping("key.elytratoggle.swap_mouse", InputConstants.Type.MOUSE, GLFW.GLFW_MOUSE_BUTTON_5, CATEGORY)
-    );
-
     // Each hotkey owns its own transaction so pressing one cannot undo the other.
     private static final SwapState TOGGLE_STATE = new SwapState();
     private static final SwapState SWAP_STATE = new SwapState();
 
     @Override
     public void onInitializeClient() {
+        ElytraToggleConfig.load();
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (TOGGLE_KEY.consumeClick()) {
                 toggleElytra(client, TOGGLE_STATE);
             }
-            while (SWAP_KEY.consumeClick() || SWAP_MOUSE_KEY.consumeClick()) {
+            while (SWAP_KEY.consumeClick()) {
                 swapBestChestplate(client, SWAP_STATE);
-            }
-            while (TOGGLE_MOUSE_KEY.consumeClick()) {
-                toggleElytra(client, TOGGLE_STATE);
             }
         });
     }
@@ -68,29 +57,29 @@ public final class ElytraToggleClient implements ClientModInitializer {
 
         if (state.toggleActive) {
             if (!chestStack.is(Items.ELYTRA)) {
-                player.displayClientMessage(Component.literal("ElytraToggle: R's Elytra is not equipped."), true);
+                showStatus(player, "ElytraToggle: R's Elytra is not equipped.");
                 return;
             }
             int destination = isInventorySlotEmpty(inventory, state.originalElytraSlot)
                     ? state.originalElytraSlot : findEmptyInventoryFirst(inventory);
             if (destination < 0) {
-                player.displayClientMessage(Component.literal("ElytraToggle: No empty inventory slot for the Elytra."), true);
+                showStatus(player, "ElytraToggle: No empty inventory slot for the Elytra.");
                 return;
             }
             clickSlot(client, player, CHEST_MENU_SLOT);
             clickSlot(client, player, inventorySlotToMenuSlot(destination));
             state.clear();
-            player.displayClientMessage(Component.literal("Elytra unequipped."), true);
+            showStatus(player, "Elytra unequipped.");
             return;
         }
 
         if (chestStack.is(Items.ELYTRA)) {
-            player.displayClientMessage(Component.literal("ElytraToggle: An Elytra is already equipped."), true);
+            showStatus(player, "ElytraToggle: An Elytra is already equipped.");
             return;
         }
         int elytraSlot = findElytraSlot(inventory);
         if (elytraSlot < 0) {
-            player.displayClientMessage(Component.literal("No Elytra found in your inventory."), true);
+            showStatus(player, "No Elytra found in your inventory.");
             return;
         }
 
@@ -104,7 +93,7 @@ public final class ElytraToggleClient implements ClientModInitializer {
             clickSlot(client, player, inventorySlotToMenuSlot(destination));
         }
         state.toggleActive = true;
-        player.displayClientMessage(Component.literal("Elytra equipped."), true);
+        showStatus(player, "Elytra equipped.");
     }
 
     // G: prefer the highest-maximum-durability chestplate in inventory. If the
@@ -135,7 +124,7 @@ public final class ElytraToggleClient implements ClientModInitializer {
             clickSlot(client, player, CHEST_MENU_SLOT);
             clickSlot(client, player, originalMenuSlot);
             state.clear();
-            player.displayClientMessage(Component.literal("Elytra/chestplate swap reverted."), true);
+            showStatus(player, "Elytra/chestplate swap reverted.");
             return;
         }
 
@@ -146,7 +135,7 @@ public final class ElytraToggleClient implements ClientModInitializer {
             ItemStack selectedSlot = inventory.getItem(state.inventoryChestplateSlot);
             if (state.elytraWasEquipped) {
                 if (!chestStack.is(state.selectedChestplateItem) || !selectedSlot.is(Items.ELYTRA)) {
-                    player.displayClientMessage(Component.literal("ElytraToggle: Inventory changed; cannot safely reverse the swap."), true);
+                    showStatus(player, "ElytraToggle: Inventory changed; cannot safely reverse the swap.");
                     return;
                 }
                 int selectedMenuSlot = inventorySlotToMenuSlot(state.inventoryChestplateSlot);
@@ -154,7 +143,7 @@ public final class ElytraToggleClient implements ClientModInitializer {
                 clickSlot(client, player, CHEST_MENU_SLOT);
                 clickSlot(client, player, selectedMenuSlot);
                 state.clear();
-                player.displayClientMessage(Component.literal("Elytra/chestplate swap reverted."), true);
+                showStatus(player, "Elytra/chestplate swap reverted.");
                 return;
             }
             ItemStack elytraSlot = inventory.getItem(state.originalElytraSlot);
@@ -181,14 +170,14 @@ public final class ElytraToggleClient implements ClientModInitializer {
             clickSlot(client, player, selectedMenuSlot);
 
             state.clear();
-            player.displayClientMessage(Component.literal("Elytra/chestplate swap reverted."), true);
+            showStatus(player, "Elytra/chestplate swap reverted.");
             return;
         }
 
         if (chestStack.is(Items.ELYTRA)) {
             int bestSlot = findBestChestplateSlot(inventory);
             if (bestSlot < 0) {
-                player.displayClientMessage(Component.literal("No chestplate found in your inventory."), true);
+                showStatus(player, "No chestplate found in your inventory.");
                 return;
             }
             state.inventoryChestplateSlot = bestSlot;
@@ -198,13 +187,13 @@ public final class ElytraToggleClient implements ClientModInitializer {
             clickSlot(client, player, menuSlot);
             clickSlot(client, player, CHEST_MENU_SLOT);
             clickSlot(client, player, menuSlot);
-            player.displayClientMessage(Component.literal("Elytra swapped with your best chestplate."), true);
+            showStatus(player, "Elytra swapped with your best chestplate.");
             return;
         }
 
         int elytraSlot = findElytraSlot(inventory);
         if (elytraSlot < 0) {
-            player.displayClientMessage(Component.literal("No Elytra found in your inventory."), true);
+            showStatus(player, "No Elytra found in your inventory.");
             return;
         }
 
@@ -278,7 +267,13 @@ public final class ElytraToggleClient implements ClientModInitializer {
         clickSlot(client, player, CHEST_MENU_SLOT);
         clickSlot(client, player, elytraMenuSlot);
 
-        player.displayClientMessage(Component.literal("Elytra and equipped chestplate swapped."), true);
+        showStatus(player, "Elytra and equipped chestplate swapped.");
+    }
+
+    private static void showStatus(LocalPlayer player, String message) {
+        if (ElytraToggleConfig.showActionbarMessages()) {
+            player.displayClientMessage(Component.literal(message), true);
+        }
     }
 
     private static boolean canUseInventory(Minecraft client) {

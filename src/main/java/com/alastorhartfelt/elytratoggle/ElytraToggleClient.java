@@ -30,22 +30,34 @@ public final class ElytraToggleClient implements ClientModInitializer {
             )
     );
 
+    private static final KeyMapping SWAP_KEY = KeyBindingHelper.registerKeyBinding(
+            new KeyMapping(
+                    "key.elytratoggle.swap",
+                    InputConstants.Type.KEYSYM,
+                    GLFW.GLFW_KEY_G,
+                    CATEGORY
+            )
+    );
+
     // Player-inventory index (0-35) where the Elytra was found.
     private static int originalInventorySlot = -1;
 
-    // If a chest item was present when equipping, it is moved into the Elytra's old slot.
+    // Item displaced from the chest slot when this mod equipped the Elytra.
     private static Item displacedChestItem = Items.AIR;
 
     @Override
     public void onInitializeClient() {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (TOGGLE_KEY.consumeClick()) {
-                toggleElytra(client);
+                toggleElytra(client, false);
+            }
+            while (SWAP_KEY.consumeClick()) {
+                toggleElytra(client, true);
             }
         });
     }
 
-    private static void toggleElytra(Minecraft client) {
+    private static void toggleElytra(Minecraft client, boolean requireChestItem) {
         if (client.player == null || client.gameMode == null || client.screen != null) {
             return;
         }
@@ -54,20 +66,12 @@ public final class ElytraToggleClient implements ClientModInitializer {
         var inventory = player.getInventory();
         ItemStack chestStack = player.getItemBySlot(EquipmentSlot.CHEST);
 
-        // Return the Elytra that this mod equipped.
+        // If this mod previously equipped the Elytra, restore it and the displaced chest item.
         if (originalInventorySlot >= 0 && chestStack.is(Items.ELYTRA)) {
             ItemStack originalSlotStack = inventory.getItem(originalInventorySlot);
 
             if (!originalSlotStack.isEmpty()
                     && originalSlotStack.getItem() != displacedChestItem) {
-                player.displayClientMessage(
-                        Component.literal("ElytraToggle: Your original inventory slot is occupied."),
-                        true
-                );
-                return;
-            }
-
-            if (!originalSlotStack.isEmpty() && originalSlotStack.getItem() != displacedChestItem) {
                 player.displayClientMessage(
                         Component.literal("ElytraToggle: Your original inventory slot is occupied."),
                         true
@@ -89,14 +93,23 @@ public final class ElytraToggleClient implements ClientModInitializer {
 
             originalInventorySlot = -1;
             displacedChestItem = Items.AIR;
-            player.displayClientMessage(Component.literal("Elytra unequipped."), true);
+            player.displayClientMessage(Component.literal("Elytra swap reverted."), true);
             return;
         }
 
-        // Do not interfere with an Elytra that was equipped before this mod's toggle was used.
+        // Do not interfere with an Elytra that was equipped before this mod's action.
         if (chestStack.is(Items.ELYTRA)) {
             player.displayClientMessage(
-                    Component.literal("ElytraToggle: This Elytra wasn't equipped by the toggle."),
+                    Component.literal("ElytraToggle: This Elytra wasn't equipped by this mod."),
+                    true
+            );
+            return;
+        }
+
+        // The dedicated swap key only operates when something is equipped in the chest slot.
+        if (requireChestItem && chestStack.isEmpty()) {
+            player.displayClientMessage(
+                    Component.literal("ElytraToggle: Equip a chestplate first to use Swap Elytra/Chestplate."),
                     true
             );
             return;
@@ -119,17 +132,21 @@ public final class ElytraToggleClient implements ClientModInitializer {
         originalInventorySlot = elytraSlot;
         displacedChestItem = chestStack.isEmpty() ? Items.AIR : chestStack.getItem();
 
-        // Pick up the Elytra, put it in the chest slot, then place any displaced chest item
-        // into the Elytra's original inventory slot.
+        // Equip the Elytra and place the displaced chest item in the Elytra's former slot.
         int sourceMenuSlot = inventorySlotToMenuSlot(elytraSlot);
         clickSlot(client, player, sourceMenuSlot);
         clickSlot(client, player, CHEST_MENU_SLOT);
 
-        if (!displacedChestItem.equals(Items.AIR)) {
+        if (displacedChestItem != Items.AIR) {
             clickSlot(client, player, sourceMenuSlot);
         }
 
-        player.displayClientMessage(Component.literal("Elytra equipped."), true);
+        player.displayClientMessage(
+                Component.literal(displacedChestItem == Items.AIR
+                        ? "Elytra equipped."
+                        : "Elytra and chest item swapped."),
+                true
+        );
     }
 
     private static int inventorySlotToMenuSlot(int inventorySlot) {

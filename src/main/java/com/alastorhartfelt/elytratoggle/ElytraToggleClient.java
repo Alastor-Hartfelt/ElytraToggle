@@ -67,13 +67,22 @@ public final class ElytraToggleClient implements ClientModInitializer {
                 return;
             }
 
+            if (!originalSlotStack.isEmpty() && originalSlotStack.getItem() != displacedChestItem) {
+                player.displayClientMessage(
+                        Component.literal("ElytraToggle: Your original inventory slot is occupied."),
+                        true
+                );
+                return;
+            }
+
             if (!originalSlotStack.isEmpty() && displacedChestItem != Items.AIR) {
-                // Restore the displaced chest item to the chest slot, and the Elytra to its old slot.
+                // Pick up the displaced chest item, take the Elytra, then restore both items.
                 clickSlot(client, player, inventorySlotToMenuSlot(originalInventorySlot));
                 clickSlot(client, player, CHEST_MENU_SLOT);
                 clickSlot(client, player, inventorySlotToMenuSlot(originalInventorySlot));
+                clickSlot(client, player, CHEST_MENU_SLOT);
             } else {
-                // The chest slot was empty, or the displaced chest item has since been moved.
+                // The original slot is empty, so return the Elytra directly to it.
                 clickSlot(client, player, CHEST_MENU_SLOT);
                 clickSlot(client, player, inventorySlotToMenuSlot(originalInventorySlot));
             }

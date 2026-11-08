@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "elytratoggle",
+  "version": "${version}",
+  "name": "ElytraToggle",
+  "description": "Toggle an Elytra from your inventory into the chest slot and back with R.",
+  "authors": [
+    "Alastor_Hartfelt"
+  ],
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.alastorhartfelt.elytratoggle.ElytraToggleClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.18.1",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}

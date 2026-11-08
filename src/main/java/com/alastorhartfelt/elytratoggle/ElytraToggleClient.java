@@ -6,6 +6,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -22,24 +23,14 @@ public final class ElytraToggleClient implements ClientModInitializer {
             KeyMapping.Category.register(Identifier.fromNamespaceAndPath("elytratoggle", "main"));
 
     private static final KeyMapping TOGGLE_KEY = KeyBindingHelper.registerKeyBinding(
-            new KeyMapping(
-                    "key.elytratoggle.toggle",
-                    InputConstants.Type.KEYSYM,
-                    GLFW.GLFW_KEY_R,
-                    CATEGORY
-            )
+            new KeyMapping("key.elytratoggle.toggle", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_R, CATEGORY)
     );
 
     private static final KeyMapping SWAP_KEY = KeyBindingHelper.registerKeyBinding(
-            new KeyMapping(
-                    "key.elytratoggle.swap",
-                    InputConstants.Type.KEYSYM,
-                    GLFW.GLFW_KEY_G,
-                    CATEGORY
-            )
+            new KeyMapping("key.elytratoggle.swap", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_G, CATEGORY)
     );
 
-    // Keep each hotkey's transaction separate so pressing one cannot undo the other.
+    // Each hotkey owns its own transaction so pressing one cannot undo the other.
     private static final SwapState TOGGLE_STATE = new SwapState();
     private static final SwapState SWAP_STATE = new SwapState();
 
@@ -47,93 +38,67 @@ public final class ElytraToggleClient implements ClientModInitializer {
     public void onInitializeClient() {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (TOGGLE_KEY.consumeClick()) {
-                toggleElytra(client, false, TOGGLE_STATE);
+                toggleElytra(client, TOGGLE_STATE);
             }
             while (SWAP_KEY.consumeClick()) {
-                toggleElytra(client, true, SWAP_STATE);
+                swapBestChestplate(client, SWAP_STATE);
             }
         });
     }
 
-    private static void toggleElytra(Minecraft client, boolean requireChestItem, SwapState state) {
-        if (client.player == null || client.gameMode == null || client.screen != null) {
+    // R: equip an Elytra and return it to its original slot on the next press.
+    private static void toggleElytra(Minecraft client, SwapState state) {
+        if (!canUseInventory(client)) {
             return;
         }
 
-        var player = client.player;
+        LocalPlayer player = client.player;
         var inventory = player.getInventory();
         ItemStack chestStack = player.getItemBySlot(EquipmentSlot.CHEST);
 
-        // Reverse only the transaction started by this specific hotkey.
-        if (state.originalInventorySlot >= 0 && chestStack.is(Items.ELYTRA)) {
-            ItemStack originalSlotStack = inventory.getItem(state.originalInventorySlot);
-
-            if (!originalSlotStack.isEmpty()
-                    && originalSlotStack.getItem() != state.displacedChestItem) {
+        if (state.originalElytraSlot >= 0 && chestStack.is(Items.ELYTRA)) {
+            if (!canRestoreSimpleSwap(inventory.getItem(state.originalElytraSlot), state)) {
                 player.displayClientMessage(
-                        Component.literal("ElytraToggle: Your original inventory slot is occupied."),
+                        Component.literal("ElytraToggle: Your original inventory slot has changed."),
                         true
                 );
                 return;
             }
 
-            if (!originalSlotStack.isEmpty() && state.displacedChestItem != Items.AIR) {
-                clickSlot(client, player, inventorySlotToMenuSlot(state.originalInventorySlot));
+            int originalMenuSlot = inventorySlotToMenuSlot(state.originalElytraSlot);
+            if (state.displacedChestItem != Items.AIR) {
+                clickSlot(client, player, originalMenuSlot);
                 clickSlot(client, player, CHEST_MENU_SLOT);
-                clickSlot(client, player, inventorySlotToMenuSlot(state.originalInventorySlot));
+                clickSlot(client, player, originalMenuSlot);
             } else {
                 clickSlot(client, player, CHEST_MENU_SLOT);
-                clickSlot(client, player, inventorySlotToMenuSlot(state.originalInventorySlot));
+                clickSlot(client, player, originalMenuSlot);
             }
 
             state.clear();
-            player.displayClientMessage(Component.literal("Elytra swap reverted."), true);
+            player.displayClientMessage(Component.literal("Elytra toggle reverted."), true);
             return;
         }
 
-        // Never take over an Elytra that was equipped before this hotkey was used.
         if (chestStack.is(Items.ELYTRA)) {
-            player.displayClientMessage(
-                    Component.literal("ElytraToggle: An Elytra is already equipped."),
-                    true
-            );
+            player.displayClientMessage(Component.literal("ElytraToggle: An Elytra is already equipped."), true);
             return;
         }
 
-        // G is specifically the Elytra/chest-slot swap: it requires an equipped item.
-        // It deliberately does not search for, equip, or otherwise inspect inventory chestplates.
-        if (requireChestItem && chestStack.isEmpty()) {
-            player.displayClientMessage(
-                    Component.literal("ElytraToggle: Equip a chestplate first to use Swap Elytra/Chestplate."),
-                    true
-            );
-            return;
-        }
-
-        // Only search for an Elytra. Inventory chestplates are intentionally ignored.
-        int elytraSlot = -1;
-        for (int i = 0; i < 36; i++) {
-            if (inventory.getItem(i).is(Items.ELYTRA)) {
-                elytraSlot = i;
-                break;
-            }
-        }
-
+        int elytraSlot = findElytraSlot(inventory);
         if (elytraSlot < 0) {
             player.displayClientMessage(Component.literal("No Elytra found in your inventory."), true);
             return;
         }
 
-        state.originalInventorySlot = elytraSlot;
+        state.originalElytraSlot = elytraSlot;
         state.displacedChestItem = chestStack.isEmpty() ? Items.AIR : chestStack.getItem();
 
-        // Put the currently equipped chest item in the Elytra's former inventory slot.
-        int sourceMenuSlot = inventorySlotToMenuSlot(elytraSlot);
-        clickSlot(client, player, sourceMenuSlot);
+        int elytraMenuSlot = inventorySlotToMenuSlot(elytraSlot);
+        clickSlot(client, player, elytraMenuSlot);
         clickSlot(client, player, CHEST_MENU_SLOT);
-
         if (state.displacedChestItem != Items.AIR) {
-            clickSlot(client, player, sourceMenuSlot);
+            clickSlot(client, player, elytraMenuSlot);
         }
 
         player.displayClientMessage(
@@ -144,12 +109,163 @@ public final class ElytraToggleClient implements ClientModInitializer {
         );
     }
 
+    // G: prefer the highest-maximum-durability chestplate in inventory. If the
+    // equipped chestplate is already the best one, swap with that instead.
+    private static void swapBestChestplate(Minecraft client, SwapState state) {
+        if (!canUseInventory(client)) {
+            return;
+        }
+
+        LocalPlayer player = client.player;
+        var inventory = player.getInventory();
+        ItemStack chestStack = player.getItemBySlot(EquipmentSlot.CHEST);
+
+        // Reverse an inventory-chestplate transaction. The Elytra was placed in
+        // the selected chestplate's old slot; the old chest item went to the
+        // Elytra's original slot.
+        if (state.inventoryChestplateSlot >= 0) {
+            ItemStack selectedSlot = inventory.getItem(state.inventoryChestplateSlot);
+            ItemStack elytraSlot = inventory.getItem(state.originalElytraSlot);
+            boolean chestStillMatches = !chestStack.isEmpty()
+                    && chestStack.getItem() == state.selectedChestplateItem;
+            boolean selectedSlotHasElytra = selectedSlot.is(Items.ELYTRA);
+            boolean elytraSlotMatches = state.displacedChestItem == Items.AIR
+                    ? elytraSlot.isEmpty()
+                    : !elytraSlot.isEmpty() && elytraSlot.getItem() == state.displacedChestItem;
+
+            if (!chestStillMatches || !selectedSlotHasElytra || !elytraSlotMatches) {
+                player.displayClientMessage(
+                        Component.literal("ElytraToggle: Inventory changed; cannot safely reverse the swap."),
+                        true
+                );
+                return;
+            }
+
+            int selectedMenuSlot = inventorySlotToMenuSlot(state.inventoryChestplateSlot);
+            int elytraMenuSlot = inventorySlotToMenuSlot(state.originalElytraSlot);
+            clickSlot(client, player, selectedMenuSlot);
+            clickSlot(client, player, elytraMenuSlot);
+            clickSlot(client, player, CHEST_MENU_SLOT);
+            clickSlot(client, player, selectedMenuSlot);
+
+            state.clear();
+            player.displayClientMessage(Component.literal("Elytra/chestplate swap reverted."), true);
+            return;
+        }
+
+        if (chestStack.is(Items.ELYTRA)) {
+            player.displayClientMessage(Component.literal("ElytraToggle: An Elytra is already equipped."), true);
+            return;
+        }
+
+        int elytraSlot = findElytraSlot(inventory);
+        if (elytraSlot < 0) {
+            player.displayClientMessage(Component.literal("No Elytra found in your inventory."), true);
+            return;
+        }
+
+        int bestChestplateSlot = -1;
+        int bestDurability = -1;
+        for (int i = 0; i < 36; i++) {
+            ItemStack candidate = inventory.getItem(i);
+            if (isChestplate(candidate)) {
+                int durability = candidate.getMaxDamage();
+                if (durability > bestDurability) {
+                    bestDurability = durability;
+                    bestChestplateSlot = i;
+                }
+            }
+        }
+
+        // If the equipped chestplate is at least as durable as the best one in
+        // inventory, retain the simple chest-slot swap behavior.
+        if (isChestplate(chestStack)
+                && chestStack.getMaxDamage() >= bestDurability) {
+            performSimpleSwap(client, player, chestStack, elytraSlot, state);
+            return;
+        }
+
+        if (bestChestplateSlot < 0) {
+            player.displayClientMessage(
+                    Component.literal("ElytraToggle: No chestplate found to swap with your Elytra."),
+                    true
+            );
+            return;
+        }
+
+        // Four clicks perform a safe three-item rotation:
+        // selected chestplate -> chest slot, old chest item -> Elytra slot,
+        // Elytra -> selected chestplate's former inventory slot.
+        state.originalElytraSlot = elytraSlot;
+        state.inventoryChestplateSlot = bestChestplateSlot;
+        state.selectedChestplateItem = inventory.getItem(bestChestplateSlot).getItem();
+        state.displacedChestItem = chestStack.isEmpty() ? Items.AIR : chestStack.getItem();
+
+        int chestplateMenuSlot = inventorySlotToMenuSlot(bestChestplateSlot);
+        int elytraMenuSlot = inventorySlotToMenuSlot(elytraSlot);
+        clickSlot(client, player, chestplateMenuSlot);
+        clickSlot(client, player, CHEST_MENU_SLOT);
+        clickSlot(client, player, elytraMenuSlot);
+        clickSlot(client, player, chestplateMenuSlot);
+
+        player.displayClientMessage(
+                Component.literal("Best-durability chestplate equipped; Elytra moved to its old slot."),
+                true
+        );
+    }
+
+    private static void performSimpleSwap(
+            Minecraft client, LocalPlayer player, ItemStack chestStack, int elytraSlot, SwapState state
+    ) {
+        state.originalElytraSlot = elytraSlot;
+        state.displacedChestItem = chestStack.getItem();
+
+        int elytraMenuSlot = inventorySlotToMenuSlot(elytraSlot);
+        clickSlot(client, player, elytraMenuSlot);
+        clickSlot(client, player, CHEST_MENU_SLOT);
+        clickSlot(client, player, elytraMenuSlot);
+
+        player.displayClientMessage(Component.literal("Elytra and equipped chestplate swapped."), true);
+    }
+
+    private static boolean canUseInventory(Minecraft client) {
+        return client.player != null && client.gameMode != null && client.screen == null;
+    }
+
+    private static boolean canRestoreSimpleSwap(ItemStack originalSlotStack, SwapState state) {
+        return originalSlotStack.isEmpty()
+                || (state.displacedChestItem != Items.AIR
+                && originalSlotStack.getItem() == state.displacedChestItem);
+    }
+
+    private static int findElytraSlot(net.minecraft.world.entity.player.Inventory inventory) {
+        for (int i = 0; i < 36; i++) {
+            if (inventory.getItem(i).is(Items.ELYTRA)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static boolean isChestplate(ItemStack stack) {
+        if (stack.isEmpty()) {
+            return false;
+        }
+        Item item = stack.getItem();
+        return item == Items.LEATHER_CHESTPLATE
+                || item == Items.CHAINMAIL_CHESTPLATE
+                || item == Items.IRON_CHESTPLATE
+                || item == Items.GOLDEN_CHESTPLATE
+                || item == Items.DIAMOND_CHESTPLATE
+                || item == Items.NETHERITE_CHESTPLATE;
+    }
+
     private static int inventorySlotToMenuSlot(int inventorySlot) {
         // In the player inventory menu, hotbar slots (0-8) are menu slots (36-44).
         return inventorySlot < 9 ? inventorySlot + 36 : inventorySlot;
     }
 
-    private static void clickSlot(Minecraft client, net.minecraft.client.player.LocalPlayer player, int menuSlot) {
+    private static void clickSlot(Minecraft client, LocalPlayer player, int menuSlot) {
         client.gameMode.handleInventoryMouseClick(
                 player.inventoryMenu.containerId,
                 menuSlot,
@@ -160,11 +276,15 @@ public final class ElytraToggleClient implements ClientModInitializer {
     }
 
     private static final class SwapState {
-        private int originalInventorySlot = -1;
+        private int originalElytraSlot = -1;
+        private int inventoryChestplateSlot = -1;
+        private Item selectedChestplateItem = Items.AIR;
         private Item displacedChestItem = Items.AIR;
 
         private void clear() {
-            originalInventorySlot = -1;
+            originalElytraSlot = -1;
+            inventoryChestplateSlot = -1;
+            selectedChestplateItem = Items.AIR;
             displacedChestItem = Items.AIR;
         }
     }

@@ -38,13 +38,41 @@ public final class ElytraToggleClient implements ClientModInitializer {
     public void onInitializeClient() {
         ElytraToggleConfig.load();
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            while (TOGGLE_KEY.consumeClick()) {
+            // Drain queued clicks, but run each action at most once per tick.
+            // This prevents rapid/repeated input from toggling a swap several
+            // times in one tick and leaving the inventory in an unexpected state.
+            boolean togglePressed = consumePendingClicks(TOGGLE_KEY);
+            boolean swapPressed = consumePendingClicks(SWAP_KEY);
+
+            if (!togglePressed && !swapPressed) {
+                return;
+            }
+            if (!canUseInventory(client)) {
+                return;
+            }
+
+            // Minecraft permits two actions to be assigned to the same key.
+            // Avoid firing both inventory transactions on one physical press.
+            if (TOGGLE_KEY.getKey().equals(SWAP_KEY.getKey())) {
+                showStatus(client.player, "ElytraToggle: Assign different keys to R and G actions.");
+                return;
+            }
+
+            if (togglePressed) {
                 toggleElytra(client, TOGGLE_STATE);
             }
-            while (SWAP_KEY.consumeClick()) {
+            if (swapPressed) {
                 swapBestChestplate(client, SWAP_STATE);
             }
         });
+    }
+
+    private static boolean consumePendingClicks(KeyMapping key) {
+        boolean pressed = false;
+        while (key.consumeClick()) {
+            pressed = true;
+        }
+        return pressed;
     }
 
     // R: equip an Elytra; on the next press return it to its original slot

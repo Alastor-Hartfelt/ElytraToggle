@@ -84,7 +84,6 @@ public final class ElytraToggleClient implements ClientModInitializer {
                 clickSlot(client, player, inventorySlotToMenuSlot(originalInventorySlot));
                 clickSlot(client, player, CHEST_MENU_SLOT);
                 clickSlot(client, player, inventorySlotToMenuSlot(originalInventorySlot));
-                clickSlot(client, player, CHEST_MENU_SLOT);
             } else {
                 // The original slot is empty, so return the Elytra directly to it.
                 clickSlot(client, player, CHEST_MENU_SLOT);

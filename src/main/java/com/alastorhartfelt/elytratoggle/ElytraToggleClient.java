@@ -120,6 +120,27 @@ public final class ElytraToggleClient implements ClientModInitializer {
         var inventory = player.getInventory();
         ItemStack chestStack = player.getItemBySlot(EquipmentSlot.CHEST);
 
+        // Reverse the simple case where the best chestplate was already equipped.
+        if (state.originalElytraSlot >= 0 && state.inventoryChestplateSlot < 0
+                && chestStack.is(Items.ELYTRA)) {
+            ItemStack originalSlotStack = inventory.getItem(state.originalElytraSlot);
+            if (!canRestoreSimpleSwap(originalSlotStack, state)) {
+                player.displayClientMessage(
+                        Component.literal("ElytraToggle: Your original inventory slot has changed."),
+                        true
+                );
+                return;
+            }
+
+            int originalMenuSlot = inventorySlotToMenuSlot(state.originalElytraSlot);
+            clickSlot(client, player, originalMenuSlot);
+            clickSlot(client, player, CHEST_MENU_SLOT);
+            clickSlot(client, player, originalMenuSlot);
+            state.clear();
+            player.displayClientMessage(Component.literal("Elytra/chestplate swap reverted."), true);
+            return;
+        }
+
         // Reverse an inventory-chestplate transaction. The Elytra was placed in
         // the selected chestplate's old slot; the old chest item went to the
         // Elytra's original slot.

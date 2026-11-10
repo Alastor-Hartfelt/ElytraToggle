@@ -1,12 +1,10 @@
 # ElytraToggle
 
-A lightweight client-side Fabric mod for Minecraft 1.21.11.
+A lightweight client-side Fabric mod for Minecraft Java Edition 26.2. It requires Java 25, Fabric Loader, and Fabric API. Mod Menu is optional.
 
 ## Keybinds
 
-- **R — Toggle Elytra:** Equip an Elytra from your inventory. Press again to return it to its original slot if that slot is free; otherwise it uses the first empty main-inventory slot, then the hotbar. When equipping, a displaced chest item is placed in the main inventory before the hotbar.
-- **G — Swap Elytra/Chestplate:** Swap an inventory Elytra with the best available chestplate, or, if an Elytra is already equipped, swap it with the highest-maximum-durability chestplate in your inventory. Press the same binding again to reverse the swap. If no chestplate exists, G can still equip an inventory Elytra, but that action cannot be toggled off with G.
+- **R — Toggle Elytra.** Equip an Elytra from your inventory, storing any displaced chest item in an available inventory slot. Press again to remove the Elytra. It goes back to its original slot if that slot is free, otherwise it uses an empty main-inventory slot before an empty hotbar slot. R takes priority if both bindings are pressed in the same tick.
+- **G — Swap Elytra and chestplate.** Swap an equipped chestplate with an Elytra in your inventory, or swap an equipped Elytra with the best available chestplate. Chestplates are ranked by material, then by remaining durability among chestplates of the same material. The swap requires both items.
 
-Both keyboard bindings can be changed in Minecraft's **Options → Controls → Key Binds** menu. The white actionbar status messages can be enabled or disabled from **Mods → ElytraToggle → Configure** (requires Mod Menu).
-
-Each action keeps its own state so R cannot accidentally reverse a G swap, and vice versa.
+Rebind either action to a keyboard key or mouse button in **Options → Controls → Key Binds**. To change the saved action-bar notification setting, open **Mods → ElytraToggle → Configure** in Mod Menu.

@@ -1,10 +1,10 @@
-name: Build ElytraToggle
+name: Build ElytraToggle 26.2
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "mc-26.2" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "mc-26.2" ]
   workflow_dispatch:
 
 permissions:
@@ -17,26 +17,26 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Java 21
+      - name: Set up Java 25
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "21"
+          java-version: "25"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "9.2.1"
+          gradle-version: "9.5.1"
 
       - name: Build mod
         run: gradle build --no-daemon
 
-      - name: Upload mod JAR
+      - name: Upload Minecraft 26.2 mod JAR
         uses: actions/upload-artifact@v4
         with:
-          name: ElytraToggle
+          name: ElytraToggle-26.2
           path: |
-            build/libs/ElytraToggle-*.jar
+            build/libs/ElytraToggle-26.2-*.jar
             !build/libs/*-sources.jar
             !build/libs/*-dev.jar
           if-no-files-found: error

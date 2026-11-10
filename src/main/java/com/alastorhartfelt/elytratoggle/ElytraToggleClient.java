@@ -3,14 +3,14 @@ package com.alastorhartfelt.elytratoggle;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -22,11 +22,11 @@ public final class ElytraToggleClient implements ClientModInitializer {
     private static final KeyMapping.Category CATEGORY =
             KeyMapping.Category.register(Identifier.fromNamespaceAndPath("elytratoggle", "main"));
 
-    private static final KeyMapping TOGGLE_KEY = KeyBindingHelper.registerKeyBinding(
+    private static final KeyMapping TOGGLE_KEY = KeyMappingHelper.registerKeyMapping(
             new KeyMapping("key.elytratoggle.toggle", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_R, CATEGORY)
     );
 
-    private static final KeyMapping SWAP_KEY = KeyBindingHelper.registerKeyBinding(
+    private static final KeyMapping SWAP_KEY = KeyMappingHelper.registerKeyMapping(
             new KeyMapping("key.elytratoggle.swap", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_G, CATEGORY)
     );
 
@@ -166,12 +166,12 @@ public final class ElytraToggleClient implements ClientModInitializer {
 
     private static void showStatus(LocalPlayer player, String message) {
         if (ElytraToggleConfig.showActionbarMessages()) {
-            player.displayClientMessage(Component.literal(message), true);
+            player.sendOverlayMessage(Component.literal(message));
         }
     }
 
     private static boolean canUseInventory(Minecraft client) {
-        return client.player != null && client.gameMode != null && client.screen == null;
+        return client.player != null && client.gameMode != null && client.gui.screen() == null;
     }
 
     private static int findItemSlot(
@@ -258,11 +258,11 @@ public final class ElytraToggleClient implements ClientModInitializer {
     }
 
     private static void clickSlot(Minecraft client, LocalPlayer player, int menuSlot) {
-        client.gameMode.handleInventoryMouseClick(
+        client.gameMode.handleContainerInput(
                 player.inventoryMenu.containerId,
                 menuSlot,
                 0,
-                ClickType.PICKUP,
+                ContainerInput.PICKUP,
                 player
         );
     }

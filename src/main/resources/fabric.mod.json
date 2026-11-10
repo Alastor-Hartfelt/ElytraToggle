@@ -3,7 +3,7 @@
   "id": "elytratoggle",
   "version": "${version}",
   "name": "ElytraToggle",
-  "description": "Toggle an Elytra from your inventory into the chest slot and back with R.",
+  "description": "Toggle an Elytra with R or swap it with your best chestplate using G.",
   "authors": [
     "Alastor_Hartfelt"
   ],
@@ -17,12 +17,12 @@
     ]
   },
   "depends": {
-    "fabricloader": ">=0.18.1",
-    "minecraft": "~1.21.11",
-    "java": ">=21",
+    "fabricloader": ">=0.19.3",
+    "minecraft": "~26.2",
+    "java": ">=25",
     "fabric-api": "*"
   },
   "suggests": {
-    "modmenu": "*"
+    "modmenu": ">=20.0.3"
   }
 }

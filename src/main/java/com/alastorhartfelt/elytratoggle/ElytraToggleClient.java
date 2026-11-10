@@ -124,9 +124,17 @@ public final class ElytraToggleClient implements ClientModInitializer {
         ItemStack equipped = player.getItemBySlot(EquipmentSlot.CHEST);
 
         if (equipped.is(Items.ELYTRA)) {
-            int chestplateSlot = findBestChestplateSlot(inventory);
+            int chestplateSlot = findHighestDurabilityChestplateSlot(inventory);
             if (chestplateSlot < 0) {
                 showStatus(player, "No chestplate found in your inventory.");
+                return;
+            }
+
+            // Re-check the exact selected stack before moving anything. G is
+            // intentionally stateless and never reads or changes R's state.
+            ItemStack selectedChestplate = inventory.getItem(chestplateSlot);
+            if (!isChestplate(selectedChestplate) || selectedChestplate.getMaxDamage() <= 0) {
+                showStatus(player, "No valid chestplate found in your inventory.");
                 return;
             }
 
@@ -209,7 +217,7 @@ public final class ElytraToggleClient implements ClientModInitializer {
         return slot >= 0 && slot < 36 && inventory.getItem(slot).isEmpty();
     }
 
-    private static int findBestChestplateSlot(net.minecraft.world.entity.player.Inventory inventory) {
+    private static int findHighestDurabilityChestplateSlot(net.minecraft.world.entity.player.Inventory inventory) {
         int bestSlot = -1;
         int bestDurability = -1;
         for (int i = 0; i < 36; i++) {
@@ -260,20 +268,13 @@ public final class ElytraToggleClient implements ClientModInitializer {
     }
 
     private static final class SwapState {
+        // R-only state. G deliberately has no reference to this object.
         private boolean toggleActive;
-        private boolean elytraWasEquipped;
         private int originalElytraSlot = -1;
-        private int inventoryChestplateSlot = -1;
-        private Item selectedChestplateItem = Items.AIR;
-        private Item displacedChestItem = Items.AIR;
 
         private void clear() {
             toggleActive = false;
-            elytraWasEquipped = false;
             originalElytraSlot = -1;
-            inventoryChestplateSlot = -1;
-            selectedChestplateItem = Items.AIR;
-            displacedChestItem = Items.AIR;
         }
     }
 }
